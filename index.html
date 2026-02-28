@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestiune Cărți</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+<div class="container mt-5">
+    <h2 class="mb-4 text-center">Aplicație Gestiune Cărți</h2>
+
+    <div class="row mb-3">
+        <div class="col-md-8 mb-2">
+            <input type="text" id="searchInput" class="form-control" placeholder="Caută în orice câmp (titlu, autor, an, gen)..." onkeyup="loadBooks()">
+        </div>
+        <div class="col-md-4 text-md-end">
+            <button class="btn btn-primary" onclick="openModal()">+ Adaugă Carte</button>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-bordered table-striped bg-white">
+            <thead class="table-dark">
+                <tr>
+                    <th>ID</th>
+                    <th>Titlu</th>
+                    <th>Autor</th>
+                    <th>An Publicare</th>
+                    <th>Gen</th>
+                    <th>Acțiuni</th>
+                </tr>
+            </thead>
+            <tbody id="bookTableBody">
+                </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="bookModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalTitle">Adaugă Carte</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="bookForm">
+            <input type="hidden" id="bookId">
+            <div class="mb-3">
+                <label>Titlu</label>
+                <input type="text" id="titlu" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label>Autor</label>
+                <input type="text" id="autor" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label>An Publicare</label>
+                <input type="number" id="an" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label>Gen</label>
+                <input type="text" id="gen" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-success w-100">Salvează</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const apiUrl = 'api.php';
+    let bookModal = new bootstrap.Modal(document.getElementById('bookModal'));
+
+    // Funcția Read & Search
+    async function loadBooks() {
+        try {
+            const query = document.getElementById('searchInput').value;
+            const res = await fetch(`${apiUrl}?q=${encodeURIComponent(query)}`);
+            const data = await res.json();
+            
+            // Verificăm dacă PHP-ul ne-a trimis o eroare în loc de lista de cărți
+            if (data.error) {
+                console.error("Eroare de la PHP:", data.error);
+                document.getElementById('bookTableBody').innerHTML = `<tr><td colspan="6" class="text-danger text-center fw-bold">Eroare Bază de Date: ${data.error}</td></tr>`;
+                return; // Oprim funcția aici
+            }
+
+            // Verificăm dacă data este cu adevărat o listă
+            if (!Array.isArray(data)) {
+                console.error("Format de date invalid returnat de PHP:", data);
+                return;
+            }
+            
+            let html = '';
+            data.forEach(book => {
+                html += `<tr>
+                    <td>${book.id}</td>
+                    <td>${book.titlu}</td>
+                    <td>${book.autor}</td>
+                    <td>${book.an_publicare}</td>
+                    <td>${book.gen}</td>
+                    <td>
+                        <button class="btn btn-sm btn-warning" onclick="editBook(${book.id}, '${book.titlu}', '${book.autor}', ${book.an_publicare}, '${book.gen}')">Editează</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteBook(${book.id})">Șterge</button>
+                    </td>
+                </tr>`;
+            });
+            document.getElementById('bookTableBody').innerHTML = html;
+        } catch (error) {
+            console.error("Eroare la procesarea cererii:", error);
+        }
+    }
+
+    // Funcția Delete
+    async function deleteBook(id) {
+        if(confirm('Ești sigur că vrei să ștergi această carte?')) {
+            await fetch(`${apiUrl}?id=${id}`, { method: 'DELETE' });
+            loadBooks();
+        }
+    }
+
+    // Deschide Modal pt Adăugare
+    function openModal() {
+        document.getElementById('bookForm').reset();
+        document.getElementById('bookId').value = '';
+        document.getElementById('modalTitle').innerText = 'Adaugă Carte';
+        bookModal.show();
+    }
+
+    // Populează Modal pt Editare
+    function editBook(id, titlu, autor, an, gen) {
+        document.getElementById('bookId').value = id;
+        document.getElementById('titlu').value = titlu;
+        document.getElementById('autor').value = autor;
+        document.getElementById('an').value = an;
+        document.getElementById('gen').value = gen;
+        document.getElementById('modalTitle').innerText = 'Editează Carte';
+        bookModal.show();
+    }
+
+    // Funcția Create / Update (la submiterea formularului)
+    document.getElementById('bookForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const id = document.getElementById('bookId').value;
+        const payload = {
+            id: id,
+            titlu: document.getElementById('titlu').value,
+            autor: document.getElementById('autor').value,
+            an_publicare: document.getElementById('an').value,
+            gen: document.getElementById('gen').value
+        };
+
+        const method = id ? 'PUT' : 'POST';
+
+        await fetch(apiUrl, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        bookModal.hide();
+        loadBooks();
+    });
+
+    // Încarcă datele inițial
+    loadBooks();
+</script>
+
+</body>
+</html>
